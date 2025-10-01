@@ -7,6 +7,6 @@ services:
       dockerfile: Dockerfile
     image: webpage:latest
     ports:
-      - "5173:80"
+      - "5173:5173"
     restart: unless-stopped
 
