@@ -6,7 +6,7 @@ function App() {
     <>
       <div>
         <h1>React Webpage</h1>
-        <p>This is a React webpage for CI/CD pipeline</p>
+        <p>This is a React webpage for Chatbot pipeline</p>
       </div>
     </>
   )
