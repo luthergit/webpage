@@ -30,8 +30,8 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Provide a default nginx config optimized for single-page apps
 COPY <<'NGINX_CONF' /etc/nginx/conf.d/default.conf
 server {
-  listen 80;
-  listen [::]:80;
+  listen 5173;
+  listen [::]:5173;
   server_name _;
   root /usr/share/nginx/html;
   index index.html;
@@ -45,7 +45,7 @@ server {
 }
 NGINX_CONF
 
-EXPOSE 80
+EXPOSE 5173
 
 CMD ["nginx", "-g", "daemon off;"]
 
