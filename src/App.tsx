@@ -5,8 +5,8 @@ import { useState } from 'react';
 
 export default function App() {
 
-  type Msg = { role: 'user' | 'assistant', content: string };
-  const [history, setHistory] = useState<Msg[]>([]);
+  // type Msg = { role: 'user' | 'assistant', content: string };
+  // const [history, setHistory] = useState<Msg[]>([]);
   const [text, setText] = useState('Ask me anything :)');
   const [reply, setReply] = useState('');
   const [user, setUser] = useState('');
@@ -30,18 +30,19 @@ function base64Utf8(s: string) {
 async function handleSubmit(e: React.FormEvent) {
   e.preventDefault();
 
-  const context = history.slice(-12);
+  // const context = history.slice(-12);
   const payload = {
     message: text,
-    history: context,
+    // history: [],
     temperature: 0.0,
-    max_tokens: 1200,
+    max_tokens: 500,
   };
 
   console.log('[chat] submitting payload:', payload);
-  console.log('[chat] history len:', context.length, 'last roles:', context.map(m => m.role));
+  // console.log('[chat] history len:', context.length, 'last roles:', context.map(m => m.role));
 
   const CHATBOT_URL = import.meta.env.VITE_CHAT_URL;
+  console.log('CHATBOT_URL', CHATBOT_URL)
 
   if (!user || !password) {
     setReply('Please enter a username and password.');
@@ -57,6 +58,8 @@ async function handleSubmit(e: React.FormEvent) {
     }, 
     body: JSON.stringify(payload),
   });
+  console.log('res', res);
+
 
   if (res.status === 401 || res.status === 403) {
     setReply('Invalid authorisation. Please check username/password.');
@@ -74,15 +77,15 @@ async function handleSubmit(e: React.FormEvent) {
   let data: any = {};
   try { data = JSON.parse(raw || '{}'); } catch { /* keep empty */ }
 
-  const next = [
-    ...history,
-    { role: 'user' as const, content: text },
-    { role: 'assistant' as const, content: String(data.reply ?? '') },
-  ];
-  console.log('[chat] appending to history:', next.slice(-2));
+  // const next = [
+  //   ...history,
+  //   { role: 'user' as const, content: text },
+  //   { role: 'assistant' as const, content: String(data.reply ?? '') },
+  // ];
+  // console.log('[chat] appending to history:', next.slice(-2));
 
   setReply(data.reply ?? 'No reply received.');
-  setHistory(next.slice(-12));
+  // setHistory(next.slice(-12));
 }
 
   return (
