@@ -67,6 +67,9 @@ export default function App() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json'},});
+        if (!r.ok){
+          setReply('Logout failed. Please try again.');
+        }
     } finally {
       setAuthed(false);
       setUser('');
