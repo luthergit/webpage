@@ -1,7 +1,7 @@
 import './App.css'
 import TextareaAutosize from 'react-textarea-autosize';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function App() {
 
@@ -11,6 +11,26 @@ export default function App() {
   const [reply, setReply] = useState('');
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
+  const [authed, setAuthed] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const SESSION_URL = import.meta.env.VITE_SESSION_URL;
+    if (!SESSION_URL) {setChecking(false); return;}
+    (async () => {
+    try {
+      const res = await fetch(SESSION_URL, {
+        credentials: 'include',});
+        setAuthed(res.ok);}
+        catch {
+          setAuthed(false);
+        }
+        finally {
+          setChecking(false);
+        }
+      })();
+  }, []);
+
 
 
 
@@ -19,97 +39,119 @@ export default function App() {
     }
 
 
+  async function login() {
+    const LOGIN_URL = import.meta.env.VITE_LOGIN_URL;
+    try {
+      const r = await fetch(LOGIN_URL, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json'},
+        body: JSON.stringify({username: user, password: password})
+      });
+      if (r.ok){
+        setAuthed(true);
+        setPassword('');
+        setReply('');
+      } else {
+        setReply('Invalid authorisation. Please check username/password.');
+      }
+      } catch {
+        setReply('Network error. Please try again.');
+      }
+    }
+  
+  async function logout() {
+    const LOGOUT_URL = import.meta.env.VITE_LOGOUT_URL;
+    try {
+      const r = await fetch(LOGOUT_URL, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json'},});
+    } finally {
+      setAuthed(false);
+      setUser('');
+      setPassword('');
+      setReply('');
+    }}
 
-function base64Utf8(s: string) {
-  const bytes = new TextEncoder().encode(s);
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!authed) {
+      setReply('Please login first.');
+      return;}
 
-async function handleSubmit(e: React.FormEvent) {
-  e.preventDefault();
+    const CHATBOT_URL = import.meta.env.VITE_CHAT_URL;
 
-  // const context = history.slice(-12);
-  const payload = {
-    message: text,
-    // history: [],
-    temperature: 0.0,
-    max_tokens: 500,
-  };
+    const payload = {
+      message: text,
+      temperature: 0.0,
+      max_tokens: 500,
+    };
 
-  console.log('[chat] submitting payload:', payload);
-  // console.log('[chat] history len:', context.length, 'last roles:', context.map(m => m.role));
+    console.log('[chat] submitting payload:', payload);
 
-  const CHATBOT_URL = import.meta.env.VITE_CHAT_URL;
-  console.log('CHATBOT_URL', CHATBOT_URL)
+    const res = await fetch(CHATBOT_URL, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json'}, 
+      body: JSON.stringify(payload),
+    });
+    console.log('res', res);
 
-  if (!user || !password) {
-    setReply('Please enter a username and password.');
-    return;
-  }
-
-  const basic = 'Basic ' +  base64Utf8(`${user}:${password}`);
-  const res = await fetch(CHATBOT_URL, {
-    method: 'POST',
-    mode: 'cors',
-    headers: { 'Content-Type': 'application/json', 
-      'Authorization': basic,
-    }, 
-    body: JSON.stringify(payload),
-  });
-  console.log('res', res);
+    if (!res.ok) {
+      setReply(res.status === 401  ? 'Session expired. Please login again.' : `Request failed (HTTP ${res.status}).`);
+      if (res.status === 401) {
+        setAuthed(false);
+      }
+      return;
+    }
+    const raw = await res.text();
+    console.log('[chat] status:', res.status, 'ctype:', res.headers.get('content-type'));
+    console.log('[chat] raw response:', raw);
 
 
-  if (res.status === 401 || res.status === 403) {
-    setReply('Invalid authorisation. Please check username/password.');
-    return;
-  }
-  const raw = await res.text();
-  console.log('[chat] status:', res.status, 'ctype:', res.headers.get('content-type'));
-  console.log('[chat] raw response:', raw);
+    let data: any = {};
+    try { data = JSON.parse(raw || '{}'); } catch {}
 
-  if (!res.ok) {
-    setReply(`Request failed (HTTP ${res.status}).`);
-    return;
-  }
+    setReply(data.reply ?? 'No reply received.');
 
-  let data: any = {};
-  try { data = JSON.parse(raw || '{}'); } catch { /* keep empty */ }
 
-  // const next = [
-  //   ...history,
-  //   { role: 'user' as const, content: text },
-  //   { role: 'assistant' as const, content: String(data.reply ?? '') },
-  // ];
-  // console.log('[chat] appending to history:', next.slice(-2));
 
-  setReply(data.reply ?? 'No reply received.');
-  // setHistory(next.slice(-12));
+  
 }
 
   return (
     <>
     <div>
          <h1>React Webpage</h1>
-        <p>This is a React webpage for Chatbot pipeline</p>
-        <p>It's my webpage</p>
+        <p>This is a React webpage for a simple chatbot</p>
         
       </div>
-
-  <div onSubmit={handleSubmit} style={{display: 'flex', gap: 10, marginBottom: 12}}>
-    <input 
-      placeholder="Username"
-      value={user}
-      onChange={(e) => setUser(e.target.value)}
-    />
-    <input 
-      placeholder="Password"
-      type="password"
-      value={password}
-      onChange={(e) => setPassword(e.target.value)}
-    />
-  </div>
+    {checking ? null : (
+      !authed ? (
+        <div style={{display: 'flex', gap: 10, marginBottom: 12}}>
+          <input 
+            placeholder="Username"
+            value={user}
+            onChange={(e) => setUser(e.target.value)}
+          />
+          <input 
+            placeholder="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button type="button" onClick={login} disabled={!user || !password}>
+            Login</button>
+        </div>
+            ): null)}
+      
+      
+      {authed && (
+        <div>
+          <button type="button" onClick={logout}>Logout</button>
+        </div>
+      )}
       
   <form onSubmit={handleSubmit} style={{display: 'flex', alignItems: 'center', gap: '20px'}}>
 
@@ -119,7 +161,7 @@ async function handleSubmit(e: React.FormEvent) {
     onChange={handleChange} 
     placeholder="Ask me anything :)" 
     />
-    <button type="submit" disabled={!user || !password || !text.trim()}>Send</button>
+    <button type="submit" disabled={!authed || !text.trim()}>Send</button>
   </form>
 
   <TextareaAutosize
