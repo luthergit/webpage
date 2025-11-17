@@ -156,14 +156,19 @@ function ChatPage({title,paragraphs,chatUrl}: {title: string, paragraphs: string
         message: text,
         temperature: 0.0,
         max_tokens: 500,
+        stream: true,
       };
 
       console.log('[chat] submitting payload:', payload);
 
+      setReply('');
       const res = await fetch(chatUrl, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json'}, 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        }, 
         body: JSON.stringify(payload),
       });
       console.log('res', res);
@@ -172,16 +177,66 @@ function ChatPage({title,paragraphs,chatUrl}: {title: string, paragraphs: string
         setReply(res.status === 401  ? 'Session expired. Please login again.' : `Request failed (HTTP ${res.status}).`);
         return;
       }
-      const raw = await res.text();
-      console.log('[chat] status:', res.status, 'ctype:', res.headers.get('content-type'));
-      console.log('[chat] raw response:', raw);
+
+      const ctype = res.headers.get('content-type');
+      if (!ctype?.includes('text/event-stream') || !res.body) {
+        // non-streaming response
+        const raw = await res.text();
+        console.log('[chat] status:', res.status, 'ctype:', res.headers.get('content-type'));
+        console.log('[chat] raw response:', raw);
 
 
-      let data: any = {};
-      try { data = JSON.parse(raw || '{}'); } catch {}
+        let data: any = {};
+        try { data = JSON.parse(raw || '{}'); } catch {}
 
-      setReply(data.reply ?? 'No reply received.');
+        setReply(data.reply ?? 'No reply received.');
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let doneStreaming = false;
 
+      while (!doneStreaming) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {stream:true});
+
+        const events = buffer.split('\n\n')
+        buffer = events.pop() || '';
+
+        for (const evt of events) {
+          const dataLines = evt
+          .split('\n')
+          .map(l => l.trim())
+          .filter(l => l.startsWith('data:'))
+          .map(l => l.slice(5).trim());
+
+          if (dataLines.length === 0) continue;
+          const dataStr = dataLines.join('\n');
+          if (dataStr === '[DONE]') {
+            doneStreaming = true;
+            break;
+          }
+
+          try {
+            const obj = JSON.parse(dataStr);
+            const piece = obj.delta
+            if (piece) setReply(prev => prev + piece);
+          }
+          catch {}      
+        } 
+
+        }
+
+        if (buffer) {
+          try{
+            const obj = JSON.parse(buffer);
+            const piece = obj.delta;
+            if (piece) setReply(prev => prev + piece);
+          }
+          catch {}
+        }
 
   }
 
