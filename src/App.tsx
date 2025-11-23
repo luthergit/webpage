@@ -282,6 +282,126 @@ function ChatPage({title,paragraphs,chatUrl}: {title: string, paragraphs: string
   )
 }
 
+function ReasoningPage({title,paragraphs,enqueueUrl}: {title: string, paragraphs: string[], enqueueUrl: string}) {
+  const [text, setText] = useState('Ask me something to reason about :)');
+  const [reply, setReply] = useState('');
+  const [pending, setPending] = useState(false);
+  const {logout }= useAuth()
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    setText(e.target.value);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+      e.preventDefault();
+      setReply('');
+      setPending(true);
+
+
+    try {
+      const res = await fetch(enqueueUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json'
+        }, 
+        body: JSON.stringify({message: text}),
+      });
+      console.log('res', res);
+
+      if (!res.ok) {
+        setReply(res.status === 401  ? 'Session expired. Please login again.' : `Request failed (HTTP ${res.status}).`);
+        return;
+      }
+
+      const {job_id} = await res.json();
+      const base = enqueueUrl.replace(/\/$/, '');
+      const pollUrl = `${base}/${job_id}`;
+
+      const start = Date.now();
+      const notFoundGraceMs = 5000;
+
+      while (true) {
+        const r = await fetch(pollUrl, {credentials: 'include'});
+
+        if (r.status === 404) {
+          if (Date.now() - start < notFoundGraceMs) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            continue;
+          } else {
+            setReply('Job not found. Please try again.');
+            break;
+          }
+        }
+        if (!r.ok) {
+          setReply(r.status === 401 ? 'Session expired. Please login again.' : `Polling failed (HTTP ${r.status}).`);
+          break;
+        }
+
+        const data = await r.json();
+        if (data.status === 'finished') {
+          setReply(data.result?.reply ?? 'No reply received.');
+          break;
+        }
+
+        if (data.status === 'failed') {
+          const errText = typeof data.error === 'string' ? data.error : 'Job failed';
+          setReply(errText);
+          break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    } catch {
+      setReply('An unexpected error occurred. Please try again.');
+    } finally {setPending(false);}
+
+  }
+
+
+  return (
+    <>
+    <div>
+      <h1>{title}</h1>
+      {paragraphs.map((p, i) => <p key={i}>{p}</p>)}
+    </div>
+
+
+    <SiteNav />
+
+    <form onSubmit={handleSubmit} style={{display: 'flex', alignItems: 'center', gap: '20px'}}>
+
+      <TextareaAutosize
+      style={{width: '500px', borderRadius: '10px', border: '1px solid #000', padding: '10px'}} 
+      value={text} 
+      onChange={handleChange} 
+      placeholder="Ask me something to reason about :)" 
+      disabled={pending}
+      />
+      <button type="submit" disabled={pending || !text.trim()}>
+        {pending ? 'Thinking' : 'Send'}
+      </button>
+    </form>
+
+    <TextareaAutosize
+      style={{width: '500px', borderRadius: '10px', border: '1px solid #000', padding: '10px'}} 
+      value={reply} 
+      placeholder="Reasoning Chatbot Response" 
+      readOnly={true}
+      />
+
+    <div style={{marginTop: 12}}>
+      <button type="button" onClick={() => {void logout();}} disabled={pending}>
+        
+        Logout</button>
+    </div>
+
+
+      </>
+    
+  )
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -300,8 +420,8 @@ export default function App() {
           } />
         <Route path="/reasoning" element={
           <RequireAuth>
-            <ChatPage title="Reasoning Chatbot" paragraphs={['This is a React webpage for a reasoning chatbot.']} 
-            chatUrl={import.meta.env.VITE_REASONING_URL} />
+            <ReasoningPage title="Reasoning Chatbot" paragraphs={['This is a React webpage for a reasoning chatbot.']} 
+            enqueueUrl={import.meta.env.VITE_REASONING_URL} />
           </RequireAuth>
         } />
 
