@@ -302,11 +302,13 @@ function ReasoningProvider({children}: {children: ReactNode}) {
   }, [authed]);
   
   const isPolling = useRef(false);
+  const POLL_INTERVAL_MS = 5000;
 
   useEffect(() => {
     const timer = setInterval(async () => {
       if (isPolling.current) return;
       const active = Object.values(jobs).filter(j => j.status !== 'finished' && j.status !== 'failed');
+      
       if (active.length === 0 || !base) return;
       isPolling.current = true;
       try {
@@ -332,6 +334,7 @@ function ReasoningProvider({children}: {children: ReactNode}) {
               }
 
               const data = await r.json();
+              
               if (data.status === 'finished') {
                 const out = data.result?.reply ?? 'No reply received.';
                 setJobs(prev => ({
@@ -361,7 +364,7 @@ function ReasoningProvider({children}: {children: ReactNode}) {
         isPolling.current = false;
         cleanup();
       }
-    }, 1000);
+    }, POLL_INTERVAL_MS);
   
     return () => clearInterval(timer);
   }, [jobs, base]);
